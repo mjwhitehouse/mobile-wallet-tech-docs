@@ -20,20 +20,27 @@ credential, see [Issue a credential](/issue-a-credential/credential/).
 
 The credential exchange flow for mdoc credentials follows the same
 [OID4VCI flow](/issuing-credentials-to-wallet.html) as JWT-based credentials, with
-one key difference: when your service builds the credential in step 23, you must
+one key difference: when your service builds the credential in step 13, you must
 construct an mdoc rather than a JWT VC.
 
-This diagram shows the steps where your service is responsible for mdoc-specific
-work. Steps shown in bold are unique to mdoc issuance.
+This diagram shows the full issuance flow. Steps annotated as 'mdoc-specific' are
+unique to mdoc issuance.
 
-```mermaid
+
+<div aria-hidden="true">
+<script type="module">
+  import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+</script>
+
+<html lang="en">
+  <body>
+    <pre class="mermaid">
   sequenceDiagram
     autonumber
     actor User as User
     participant CRI as Your service
     participant App as GOV.UK Wallet app
     participant OneLogin as GOV.UK One Login
-
     activate User
     User->>CRI: Accesses your service
     activate CRI
@@ -44,7 +51,6 @@ work. Steps shown in bold are unique to mdoc issuance.
     CRI->>CRI: Generates credential offer
     CRI-->>User: Renders credential offer as QR code or deep link
     deactivate CRI
-
     User->>App: Opens app and redeems offer
     activate App
     App->>CRI: Fetches metadata:<br/>GET /.well-known/openid-credential-issuer
@@ -82,7 +88,13 @@ work. Steps shown in bold are unique to mdoc issuance.
     deactivate CRI
     deactivate App
     deactivate User
-```
+    </pre>
+    <script type="module">
+      import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+    </script>
+  </body>
+</html>
+</div>
 
 ### User authenticates and your service generates a credential offer
 
@@ -237,10 +249,7 @@ You must then wrap this map as a **tagged CBOR byte string** using CBOR tag 24
 (`#6.24(bstr)`). This wrapping is required so that the hash you compute in the
 next step covers the exact bytes of each CBOR-encoded element.
 
-!!! warning
-    A common implementation error is to hash the `IssuerSignedItem` map directly
-    without first wrapping it with CBOR tag 24. The hash must be computed over the
-    tagged byte string, not the map.
+<%= warning_text('A common implementation error is to hash the IssuerSignedItem map directly without first wrapping it with CBOR tag 24. The hash must be computed over the tagged byte string, not the map.') %>
 
 ### Compute hashes
 
@@ -419,12 +428,7 @@ Your Document Signer certificate must:
   Annex B of ISO/IEC 18013-5
 - be valid (not expired) at the time of signing
 
-!!! warning
-    Contact the GOV.UK Wallet onboarding team to register your IACA root
-    certificate with the GOV.UK Wallet trust infrastructure. GOV.UK Wallet will
-    only accept mdoc credentials signed by a Document Signer certificate that
-    chains to a registered IACA root. This registration must be completed before
-    you can test end-to-end issuance.
+<%= warning_text('Contact the GOV.UK Wallet onboarding team to register your IACA root certificate with the GOV.UK Wallet trust infrastructure. GOV.UK Wallet will only accept mdoc credentials signed by a Document Signer certificate that chains to a registered IACA root. This registration must be completed before you can test end-to-end issuance.') %>
 
 ## Return the mdoc in the credential response
 
