@@ -1,0 +1,544 @@
+---
+title: Create an mdoc credential
+weight: 46
+last_reviewed_on: 2026-03-08
+review_in: 6 months
+---
+
+# Create an mdoc credential
+
+GOV.UK Wallet supports the mdoc (mobile document) credential format, defined by
+[ISO/IEC 18013-5:2021](https://www.iso.org/standard/69084.html). If your department
+has agreed with the GOV.UK Wallet onboarding team that you will issue an mdoc-based
+credential — such as the mobile driving licence (mDL) — you must follow this guidance
+when constructing and signing the credential.
+
+This page covers the mdoc format only. If you are issuing a JWT-based verifiable
+credential, see [Issue a credential](/issue-a-credential/credential/).
+
+## Understand the mdoc issuance flow
+
+The credential exchange flow for mdoc credentials follows the same
+[OID4VCI flow](/issuing-credentials-to-wallet.html) as JWT-based credentials, with
+one key difference: when your service builds the credential in step 23, you must
+construct an mdoc rather than a JWT VC.
+
+This diagram shows the steps where your service is responsible for mdoc-specific
+work. Steps shown in bold are unique to mdoc issuance.
+
+```mermaid
+  sequenceDiagram
+    autonumber
+    actor User as User
+    participant CRI as Your service
+    participant App as GOV.UK Wallet app
+    participant OneLogin as GOV.UK One Login
+
+    activate User
+    User->>CRI: Accesses your service
+    activate CRI
+    CRI->>OneLogin: Authenticates user
+    activate OneLogin
+    OneLogin-->>CRI: Returns walletSubjectId
+    deactivate OneLogin
+    CRI->>CRI: Generates credential offer
+    CRI-->>User: Renders credential offer as QR code or deep link
+    deactivate CRI
+
+    User->>App: Opens app and redeems offer
+    activate App
+    App->>CRI: Fetches metadata:<br/>GET /.well-known/openid-credential-issuer
+    activate CRI
+    CRI-->>App: Returns metadata (format: mso_mdoc)
+    deactivate CRI
+    App->>OneLogin: Exchanges pre-authorised code for access token
+    activate OneLogin
+    OneLogin-->>App: Issues access token
+    deactivate OneLogin
+    App->>App: Generates proof of possession (did:key)
+    App->>CRI: Requests credential:<br/>POST /credential
+    activate CRI
+    CRI->>CRI: Validates access token and proof of possession
+    CRI->>CRI: Encodes data elements as IssuerSignedItems (CBOR, tag 24)
+    Note over CRI: mdoc-specific step
+    CRI->>CRI: Computes SHA-256 digest for each element
+    Note over CRI: mdoc-specific step
+    CRI->>CRI: Builds Mobile Security Object (MSO)
+    Note over CRI: mdoc-specific step
+    CRI->>CRI: Signs MSO as COSE_Sign1 (IssuerAuth)
+    Note over CRI: mdoc-specific step
+    CRI->>CRI: Assembles IssuerSigned and CBOR-encodes MobileDocument
+    Note over CRI: mdoc-specific step
+    CRI-->>App: Returns base64url-encoded MobileDocument
+    deactivate CRI
+    App->>CRI: Fetches public key:<br/>GET /.well-known/did.json
+    activate CRI
+    CRI-->>App: Returns DID document
+    deactivate CRI
+    App->>App: Verifies credential and stores it
+    App->>CRI: Notifies of success or failure:<br/>POST /notification
+    activate CRI
+    CRI-->>App: Returns empty response
+    deactivate CRI
+    deactivate App
+    deactivate User
+```
+
+### User authenticates and your service generates a credential offer
+
+Steps 1 to 5 are the same as for JWT VC credentials. See
+[Issuing credentials to GOV.UK Wallet](/issuing-credentials-to-wallet.html) for
+full guidance on these steps.
+
+1. Your user accesses your service.
+2. Your service authenticates the user with GOV.UK One Login.
+3. GOV.UK One Login returns the user's `walletSubjectId`.
+4. Your service generates a credential offer containing a pre-authorised code.
+5. Your service renders the credential offer as a QR code or deep link.
+
+### GOV.UK Wallet fetches your metadata and requests a credential
+
+6. The user opens GOV.UK Wallet and redeems the credential offer.
+7. GOV.UK Wallet sends a `GET` request to your `/.well-known/openid-credential-issuer`
+   endpoint to fetch your metadata. Your metadata must declare `mso_mdoc` as the
+   format for this credential. See
+   [Declare mdoc support in your issuer metadata](#declare-mdoc-support-in-your-issuer-metadata).
+8. Your service returns its metadata.
+9. GOV.UK Wallet exchanges the pre-authorised code for an access token from
+   GOV.UK One Login.
+10. GOV.UK One Login issues the access token.
+11. GOV.UK Wallet generates a proof of possession containing its `did:key`.
+12. GOV.UK Wallet sends a `POST` request to your `/credential` endpoint. The
+    request includes the access token and the proof of possession.
+
+### Your service builds and signs the mdoc credential
+
+Steps 13 to 17 are specific to mdoc issuance. This is where your implementation
+differs from issuing a JWT VC.
+
+13. Your service validates the access token and proof of possession. See
+    [Issue a credential](/issue-a-credential/credential/#request-validation) for
+    the full validation steps, which are the same for mdoc and JWT VC credentials.
+14. For each data element to include in the credential, your service encodes it as
+    an `IssuerSignedItem` CBOR map and wraps it with CBOR tag 24. See
+    [Encode data elements](#encode-data-elements).
+15. Your service computes a SHA-256 digest for each tagged `IssuerSignedItem`. See
+    [Compute hashes](#compute-hashes).
+16. Your service builds the Mobile Security Object (MSO), which contains all the
+    digests, the wallet's device public key, and the validity dates. See
+    [Build the Mobile Security Object](#build-the-mobile-security-object-mso).
+17. Your service signs the MSO as a COSE_Sign1 structure using your Document Signer
+    private key. This produces IssuerAuth. See
+    [Sign the MSO using COSE_Sign1](#sign-the-mso-using-cose_sign1).
+18. Your service assembles `IssuerSigned` from IssuerAuth and the `IssuerSignedItem`
+    byte strings, then CBOR-encodes the complete `MobileDocument` and returns it
+    to GOV.UK Wallet as a base64url-encoded string. See
+    [Assemble IssuerSigned](#assemble-issuersigned) and
+    [Return the mdoc in the credential response](#return-the-mdoc-in-the-credential-response).
+
+### GOV.UK Wallet verifies and stores the credential
+
+19. GOV.UK Wallet fetches your DID document to get your public key.
+20. Your service returns the DID document.
+21. GOV.UK Wallet verifies the credential content and signature, then stores it.
+
+### GOV.UK Wallet notifies your service
+
+Step 22 is optional. GOV.UK Wallet will only send a notification if you implement
+a `/notification` endpoint.
+
+22. GOV.UK Wallet sends a `POST` request to your `/notification` endpoint to
+    confirm whether it successfully stored the credential. See
+    [Handle notifications from GOV.UK Wallet](/issue-a-credential/notification/).
+
+## Understand the mdoc data model
+
+An mdoc is a CBOR-encoded document. It groups data elements into one or more
+**namespaces**. A namespace is a string identifier — for example,
+`org.iso.18013.5.1` — that scopes a set of related data elements.
+
+Each data element within a namespace has:
+
+- an **element identifier** — a string key such as `family_name`
+- an **element value** — the holder's data, encoded as a CBOR data item
+- a **digest ID** — an integer used to link the element to its hash in the Mobile
+  Security Object (MSO)
+- a **random salt** — a cryptographically random byte string used when hashing the
+  element, to prevent a verifier correlating values across separate presentations
+
+This structure supports **selective disclosure**: the holder can reveal individual
+data elements to a verifier without exposing the rest of the document. This is
+different from JWT VCs, where all claims in the credential are disclosed together.
+
+The top-level structure of an mdoc credential is:
+
+```
+MobileDocument = {
+  "docType"      : tstr,          ; for example, "org.iso.18013.5.1.mDL"
+  "issuerSigned" : IssuerSigned,
+  "deviceSigned" : DeviceSigned   ; added by the wallet at presentation time
+}
+```
+
+As an issuing department, you are responsible for producing `docType` and
+`issuerSigned`. The wallet adds `deviceSigned` when the holder presents the
+credential to a verifier.
+
+## Set the docType
+
+The `docType` string identifies the type of document and determines which
+namespaces and data elements are valid. Use the docType you agreed with the
+GOV.UK Wallet onboarding team.
+
+For the mobile driving licence, the docType is:
+
+```
+org.iso.18013.5.1.mDL
+```
+
+For other credential types, the GOV.UK Wallet onboarding team will give you the
+docType to use.
+
+## Encode data elements
+
+### Choose namespaces
+
+Every data element must be assigned to a namespace. For mDL credentials, use
+`org.iso.18013.5.1` for standard ISO data elements. You can also define additional
+namespaces for department-specific data elements using a reverse domain name
+convention, for example `uk.gov.dvla`.
+
+### Assign digest IDs
+
+Each data element in a namespace must have a unique `digestID` integer within
+that namespace. You can assign values in any order, but each must be unique within
+its namespace.
+
+### Generate salts
+
+For each data element, generate a cryptographically random byte string of at least
+16 bytes. This salt prevents a verifier from correlating hash values across
+different presentations of the same credential.
+
+### Encode IssuerSignedItem
+
+Encode each data element as a CBOR map called an `IssuerSignedItem`:
+
+```
+IssuerSignedItem = {
+  "digestID"          : uint,
+  "random"            : bstr,   ; the salt, minimum 16 bytes
+  "elementIdentifier" : tstr,
+  "elementValue"      : any     ; CBOR-encoded value
+}
+```
+
+You must then wrap this map as a **tagged CBOR byte string** using CBOR tag 24
+(`#6.24(bstr)`). This wrapping is required so that the hash you compute in the
+next step covers the exact bytes of each CBOR-encoded element.
+
+!!! warning
+    A common implementation error is to hash the `IssuerSignedItem` map directly
+    without first wrapping it with CBOR tag 24. The hash must be computed over the
+    tagged byte string, not the map.
+
+### Compute hashes
+
+For each tagged `IssuerSignedItem` byte string:
+
+1. Hash the tagged byte string using SHA-256.
+2. Record the resulting digest against its `digestID`.
+
+These digests go into the MSO in the next step. The original tagged byte strings
+go into `IssuerSigned` so the wallet can present them to verifiers, who recompute
+the hashes to check they match the MSO.
+
+## Build the Mobile Security Object (MSO)
+
+The MSO is the structure you sign as the issuing authority. It binds the data
+element hashes to the wallet's public key and sets the document's validity period.
+
+The MSO has the following structure:
+
+```
+MobileSecurityObject = {
+  "version"         : tstr,   ; must be "1.0"
+  "digestAlgorithm" : tstr,   ; must be "SHA-256"
+  "valueDigests"    : ValueDigests,
+  "deviceKeyInfo"   : DeviceKeyInfo,
+  "docType"         : tstr,
+  "validityInfo"    : ValidityInfo
+}
+
+ValueDigests = {
+  + NameSpace => DigestIDs
+}
+
+DigestIDs = {
+  + DigestID => Digest
+}
+
+DigestID = uint
+Digest   = bstr   ; SHA-256 hash of the tagged IssuerSignedItem
+
+DeviceKeyInfo = {
+  "deviceKey" : DeviceKey   ; COSE_Key encoding of the wallet's public key
+}
+
+ValidityInfo = {
+  "signed"           : tdate,   ; time of signing (RFC 3339)
+  "validFrom"        : tdate,   ; must be equal to or later than "signed"
+  "validUntil"       : tdate,   ; expiry of this MSO
+  ? "expectedUpdate" : tdate    ; optional hint for next reissuance
+}
+```
+
+### Set validity dates
+
+| Field | Requirement |
+|---|---|
+| `signed` | The timestamp at the moment of signing. |
+| `validFrom` | Must be equal to or later than `signed`. Typically the same value. |
+| `validUntil` | The date and time after which the MSO is no longer valid. Must not exceed the `credential_validity_period_max_days` agreed with the GOV.UK Wallet onboarding team. |
+| `expectedUpdate` | Optional. Use this to signal when you expect to reissue the credential. |
+
+Set all date values as RFC 3339 full date-time strings, for example
+`2026-03-08T00:00:00Z`.
+
+### Include the device public key
+
+The `deviceKey` is the wallet's public key. You receive it in the proof of
+possession during the credential request, encoded as a `did:key`. You must encode
+it as a COSE_Key map before including it in the MSO.
+
+For a P-256 key, the COSE_Key encoding is:
+
+```
+{
+  1:  2,    ; kty: EC2
+  -1: 1,    ; crv: P-256
+  -2: bstr, ; x coordinate (32 bytes, big-endian)
+  -3: bstr  ; y coordinate (32 bytes, big-endian)
+}
+```
+
+Extract the x and y coordinates from the wallet's `did:key`. See
+[Using the did:key format](/issue-a-credential/credential/#the-did-key-format)
+for details on decoding a `did:key`.
+
+This is the mdoc equivalent of setting the `sub` claim to the `did:key` in a JWT
+VC. It cryptographically binds the credential to the specific wallet instance.
+
+## Sign the MSO using COSE_Sign1
+
+Sign the MSO using a COSE_Sign1 structure, as defined in
+[RFC 8152](https://datatracker.ietf.org/doc/html/rfc8152). This produces a
+structure called **IssuerAuth**:
+
+```
+IssuerAuth = COSE_Sign1  ; see RFC 8152
+```
+
+### Construct the protected header
+
+The protected header is a CBOR map containing:
+
+| Label | Key | Value |
+|---|---|---|
+| `1` | `alg` | `-7` (ES256 — ECDSA with SHA-256) |
+| `33` | `x5chain` | CBOR array of DER-encoded X.509 certificates in your issuer certificate chain |
+
+The `x5chain` header (COSE header label `33`) must contain your Document Signer
+certificate and any intermediate certificates, up to but not including your IACA
+root certificate. The verifier uses this chain to verify your signature and
+establish trust in your issuing authority.
+
+Encode the protected header as a CBOR map, then wrap it as a byte string before
+placing it in the COSE_Sign1 array.
+
+### Construct the signature input
+
+The signature is computed over a `Sig_Structure`, as defined in RFC 8152:
+
+```
+Sig_Structure = [
+  "Signature1",      ; context string
+  protected_header,  ; the protected header byte string
+  h'',               ; empty external AAD
+  payload            ; CBOR encoding of the MobileSecurityObject
+]
+```
+
+Encode this array as CBOR and sign the result using ECDSA with P-256 and
+SHA-256 (ES256).
+
+### Assemble COSE_Sign1
+
+```
+COSE_Sign1 = [
+  protected_header,  ; bstr wrapping the CBOR map
+  {},                ; empty unprotected header map
+  payload,           ; bstr wrapping the CBOR-encoded MSO, or nil
+  signature          ; bstr containing the ECDSA signature bytes
+]
+```
+
+Tag the complete COSE_Sign1 structure with CBOR tag 18 (`#6.18`).
+
+## Assemble IssuerSigned
+
+`IssuerSigned` contains IssuerAuth and the tagged `IssuerSignedItem` byte strings
+for each namespace:
+
+```
+IssuerSigned = {
+  ? "nameSpaces" : IssuerNameSpaces,
+  "issuerAuth"   : IssuerAuth
+}
+
+IssuerNameSpaces = {
+  + NameSpace => [ + IssuerSignedItemBytes ]
+}
+
+IssuerSignedItemBytes = #6.24(bstr .cbor IssuerSignedItem)
+```
+
+The `IssuerSignedItemBytes` values here are the same tagged byte strings you
+hashed when building the MSO. Including them allows the wallet to present
+individual data elements to a verifier, who recomputes the hashes to confirm
+they match the digests in the signed MSO.
+
+## Certificate requirements
+
+Your Document Signer certificate must:
+
+- be an X.509 certificate issued under your IACA (Issuing Authority Certificate
+  Authority) root certificate
+- use an EC P-256 key pair
+- include the Extended Key Usage (EKU) value `id-mdoc-signer`, as specified in
+  Annex B of ISO/IEC 18013-5
+- be valid (not expired) at the time of signing
+
+!!! warning
+    Contact the GOV.UK Wallet onboarding team to register your IACA root
+    certificate with the GOV.UK Wallet trust infrastructure. GOV.UK Wallet will
+    only accept mdoc credentials signed by a Document Signer certificate that
+    chains to a registered IACA root. This registration must be completed before
+    you can test end-to-end issuance.
+
+## Return the mdoc in the credential response
+
+GOV.UK Wallet requests credentials using the OID4VCI protocol. When issuing an
+mdoc, your `/credential` endpoint must return the credential as a
+base64url-encoded byte string in the response body.
+
+The response format follows the
+[OID4VCI specification](https://openid.net/specs/openid-4-verifiable-credential-issuance-1_0.html#section-8.3).
+Set the `format` value to `mso_mdoc`:
+
+```json
+{
+  "credentials": [
+    {
+      "format": "mso_mdoc",
+      "credential": "<base64url-encoded CBOR-encoded MobileDocument>"
+    }
+  ],
+  "notification_id": "776aefd4-26c6-4a5f-aa7c-b5e294cd87cd"
+}
+```
+
+To produce the value of `credential`:
+
+1. CBOR-encode the complete `MobileDocument` structure, including `docType`
+   and `issuerSigned`.
+2. Encode the resulting bytes using base64url encoding with no padding.
+
+Only include `notification_id` if you implement the
+[notification endpoint](/issue-a-credential/notification/).
+
+## Declare mdoc support in your issuer metadata
+
+Your `/.well-known/openid-credential-issuer` metadata must declare each mdoc
+credential type you support. Use `mso_mdoc` as the format value and include the
+`doctype`:
+
+```json
+{
+  "credential_issuer": "https://example-credential-issuer.gov.uk",
+  "credential_endpoint": "https://example-credential-issuer.gov.uk/credential",
+  "credential_configurations_supported": {
+    "org.iso.18013.5.1.mDL": {
+      "format": "mso_mdoc",
+      "doctype": "org.iso.18013.5.1.mDL",
+      "cryptographic_binding_methods_supported": ["did:key"],
+      "credential_signing_alg_values_supported": ["ES256"],
+      "claims": {
+        "org.iso.18013.5.1": {
+          "family_name": { "mandatory": true },
+          "given_name":  { "mandatory": true },
+          "birth_date":  { "mandatory": true },
+          "issue_date":  { "mandatory": true },
+          "expiry_date": { "mandatory": true },
+          "portrait":    { "mandatory": false }
+        }
+      }
+    }
+  }
+}
+```
+
+The `claims` object must match the namespaces and element identifiers agreed in
+your credential template. See [Publish your metadata](/issue-a-credential/metadata/)
+for full metadata guidance.
+
+## Data element encoding reference
+
+When encoding element values as CBOR, use the following data type mappings
+consistent with ISO/IEC 18013-5 Annex A:
+
+| Data type | CBOR encoding |
+|---|---|
+| Full date (for example, date of birth) | CBOR tag 1004, text string in `YYYY-MM-DD` format |
+| Date-time | CBOR tag 0, RFC 3339 text string |
+| String | CBOR text string (major type 3) |
+| Integer | CBOR unsigned or signed integer (major type 0 or 1) |
+| Boolean | CBOR simple value `true` or `false` |
+| Portrait image | CBOR byte string containing the image bytes |
+| Driving privileges | CBOR array of driving privilege maps — see ISO/IEC 18013-5 section 7.2.4 |
+
+For portrait images, the same validation rules apply as for JWT VC credentials.
+See [guidance on including photos](/issue-a-credential/credential/#guidance-on-including-photos).
+
+## Summary of issuer responsibilities
+
+As an issuing department, you are responsible for:
+
+1. Building the `IssuerSignedItem` maps for each data element, including assigning
+   digest IDs and generating random salts.
+2. Computing SHA-256 hashes of the tagged `IssuerSignedItem` byte strings.
+3. Constructing the MSO with correct validity dates and the wallet's device key.
+4. Signing the MSO as a COSE_Sign1 structure using your Document Signer private
+   key, with your certificate chain in the `x5chain` header.
+5. Assembling `IssuerSigned` from the signed MSO and the `IssuerSignedItem` byte
+   strings.
+6. CBOR-encoding the complete `MobileDocument` and returning it base64url-encoded
+   in the credential response.
+
+GOV.UK Wallet is responsible for generating the device key pair, providing the
+device public key in the proof of possession, and adding `deviceSigned` at
+presentation time.
+
+## Related guidance
+
+- [Issuing credentials to GOV.UK Wallet](/issuing-credentials-to-wallet.html) —
+  the full OID4VCI issuance flow that mdoc credentials follow
+- [Issue a credential](/issue-a-credential/credential/) — for departments issuing
+  JWT-based verifiable credentials
+- [Publish your metadata](/issue-a-credential/metadata/) — how to declare the
+  credentials your service supports
+- [Manage keys](/manage-keys/) — how to manage your Document Signer key pair
+- [Mobile driving licence](/consuming-and-verifying-credentials/credentials-in-wallet/mobile-driving-licence.html) —
+  the data elements available for the mDL in GOV.UK Wallet
+- [ISO/IEC 18013-5:2021](https://www.iso.org/standard/69084.html) — the full
+  standard (purchase required)
