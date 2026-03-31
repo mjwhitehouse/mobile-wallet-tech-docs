@@ -220,6 +220,10 @@ Every data element must be assigned to a namespace. For mDL credentials, use
 namespaces for department-specific data elements using a reverse domain name
 convention, for example `uk.gov.dvla`.
 
+If your credential type does not use any ISO 18013-5.1 attributes at all, see
+[Issue a credential with a custom namespace](/issue-a-credential/mdoc/custom-namespace/)
+for a worked example and full guidance.
+
 ### Assign digest IDs
 
 Each data element in a namespace must have a unique `digestID` integer within
@@ -537,6 +541,8 @@ presentation time.
 
 - [Issuing credentials to GOV.UK Wallet](/issuing-credentials-to-wallet.html) —
   the full OID4VCI issuance flow that mdoc credentials follow
+- [Issue a credential with a custom namespace](/issue-a-credential/mdoc/custom-namespace/) —
+  how to define and use a custom namespace for new credential types that don't use ISO 18013-5.1 attributes
 - [Issue a credential](/issue-a-credential/credential/) — for departments issuing
   JWT-based verifiable credentials
 - [Publish your metadata](/issue-a-credential/metadata/) — how to declare the

@@ -1,0 +1,267 @@
+---
+title: Issue a credential with a custom namespace
+weight: 47
+last_reviewed_on: 2026-03-31
+review_in: 6 months
+---
+
+# Issue a credential with a custom namespace
+
+Use this guidance if your credential type does not use ISO/IEC 18013-5.1 standard
+attributes. You will need to define a custom namespace containing data elements
+specific to your service. This page uses a fictional sheep licence as a worked
+example throughout.
+
+## When to use a custom namespace
+
+The ISO/IEC 18013-5.1 standard defines data elements for driving licences —
+attributes such as `family_name`, `birth_date`, and `driving_privileges`. If your
+credential maps onto those attributes, use the standard namespace `org.iso.18013.5.1`
+and follow the [Create an mdoc credential](/issue-a-credential/mdoc/) guidance.
+
+Most new government credential types will need a custom namespace. If your credential
+has no overlap with driving licence attributes — for example a sheep licence, a
+professional registration, or a benefit entitlement — you must define your own
+namespace to contain your data elements.
+
+## Agree your docType and namespace with the GOV.UK Wallet team
+
+Before you write any code, contact the GOV.UK Wallet onboarding team to agree:
+
+- your `docType` string
+- your namespace string
+- the data elements you want to include and their data types
+
+The GOV.UK Wallet team maintains a registry of docTypes to prevent two issuers
+from using the same value. Your credential will not be accepted by GOV.UK Wallet
+until your docType is registered.
+
+<%= warning_text('Do not use a docType or namespace in production until you have confirmed it with the GOV.UK Wallet onboarding team. Using an unregistered docType will cause GOV.UK Wallet to reject your credential.') %>
+
+## Name your docType and namespace
+
+### Naming convention
+
+Use a reverse-domain-name format to make your docType and namespace globally
+unique. For UK government departments, this starts with `uk.gov.`, followed by
+your department's identifier, then the credential name in lowercase with hyphens.
+
+### docType
+
+The `docType` identifies the document type. It does not include a version suffix,
+because versioning is handled through the GOV.UK Wallet onboarding process:
+
+```
+uk.gov.defra.sheep-licence
+```
+
+### Namespace
+
+The namespace scopes data elements within the credential. It includes a version
+suffix so that future changes to your element set can be versioned independently:
+
+```
+uk.gov.defra.sheep-licence.1
+```
+
+### Worked example — the sheep licence
+
+The Department for Environment, Food and Rural Affairs (DEFRA) is issuing a digital
+sheep licence. The values agreed with the GOV.UK Wallet team are:
+
+| Field | Value |
+|---|---|
+| `docType` | `uk.gov.defra.sheep-licence` |
+| Namespace | `uk.gov.defra.sheep-licence.1` |
+
+## Design your data elements
+
+Work with the GOV.UK Wallet onboarding team to agree the data elements for your
+namespace. Each element needs an identifier, a data type, a mandatory flag, a
+description, and an example value.
+
+Choose identifiers that are unambiguous and consistent with how your back-end
+systems refer to the data. Use `snake_case`. Avoid abbreviations. Once agreed
+and deployed, element identifiers cannot be changed without creating a new
+namespace version.
+
+For the CBOR data type encodings to use, see the
+[data element encoding reference](/issue-a-credential/mdoc/#data-element-encoding-reference)
+on the main mdoc page.
+
+### Sheep licence data elements
+
+| Element identifier | Data type | Mandatory | Description | Example |
+|---|---|---|---|---|
+| `licence_number` | String | Yes | Unique DEFRA-assigned identifier for this licence. | `SL-2024-00847` |
+| `holder_family_name` | String | Yes | Family name of the licence holder as registered with DEFRA. | `Shepherd` |
+| `holder_given_name` | String | Yes | Given name(s) of the licence holder as registered with DEFRA. | `James Robert` |
+| `holder_date_of_birth` | Full date (CBOR tag 1004) | Yes | Date of birth of the licence holder, formatted `YYYY-MM-DD`. | `1972-04-15` |
+| `issue_date` | Full date (CBOR tag 1004) | Yes | Date this licence was issued, formatted `YYYY-MM-DD`. | `2024-01-10` |
+| `expiry_date` | Full date (CBOR tag 1004) | Yes | Date this licence expires, formatted `YYYY-MM-DD`. | `2025-01-09` |
+| `sheep_count` | Integer | Yes | Total number of sheep covered by this licence. | `120` |
+| `pasture_region` | String | Yes | Administrative region in which the licensed pasture is located. | `Yorkshire Dales` |
+| `holding_number` | String | Yes | County Parish Holding (CPH) number, as registered with the Rural Payments Agency. | `12/345/0006` |
+| `licence_type` | String | Yes | Type of licence. One of `standard`, `breeding`, or `movement`. | `breeding` |
+| `issuing_authority` | String | Yes | The authority that issued this licence. | `DEFRA` |
+| `issuing_country` | String | Yes | ISO 3166-1 alpha-2 country code for the issuing country. | `GB` |
+
+## Update your issuer metadata
+
+Your `/.well-known/openid-credential-issuer` metadata must declare your custom
+namespace credential. The structure is the same as for the mDL, with one key
+difference: the `claims` object uses your namespace string — including the version
+suffix — as its key, not `org.iso.18013.5.1`.
+
+The key inside `credential_configurations_supported` must match the `doctype`
+value exactly:
+
+```json
+{
+  "credential_issuer": "https://sheep-licence.defra.gov.uk",
+  "authorization_servers": ["https://token.account.gov.uk"],
+  "credential_endpoint": "https://sheep-licence.defra.gov.uk/credential",
+  "notification_endpoint": "https://sheep-licence.defra.gov.uk/notification",
+  "credential_configurations_supported": {
+    "uk.gov.defra.sheep-licence": {
+      "format": "mso_mdoc",
+      "doctype": "uk.gov.defra.sheep-licence",
+      "credential_refresh_web_journey_url": "https://sheep-licence.defra.gov.uk/refresh",
+      "credential_validity_period_max_days": 365,
+      "cryptographic_binding_methods_supported": ["did:key"],
+      "credential_signing_alg_values_supported": ["ES256"],
+      "proof_types_supported": {
+        "jwt": {
+          "proof_signing_alg_values_supported": ["ES256"]
+        }
+      },
+      "claims": {
+        "uk.gov.defra.sheep-licence.1": {
+          "licence_number":       { "mandatory": true },
+          "holder_family_name":   { "mandatory": true },
+          "holder_given_name":    { "mandatory": true },
+          "holder_date_of_birth": { "mandatory": true },
+          "issue_date":           { "mandatory": true },
+          "expiry_date":          { "mandatory": true },
+          "sheep_count":          { "mandatory": true },
+          "pasture_region":       { "mandatory": true },
+          "holding_number":       { "mandatory": true },
+          "licence_type":         { "mandatory": true },
+          "issuing_authority":    { "mandatory": true },
+          "issuing_country":      { "mandatory": true }
+        }
+      }
+    }
+  }
+}
+```
+
+Note that:
+
+- the key inside `claims` (`"uk.gov.defra.sheep-licence.1"`) is the namespace string, not the docType — it includes the `.1` version suffix
+- `credential_validity_period_max_days` of 365 reflects a 1-year sheep licence; use the value you agreed with the GOV.UK Wallet onboarding team
+- set `"mandatory": false` for any element that may be absent for some holders
+
+See [Publish your metadata](/issue-a-credential/metadata/) for full guidance on the metadata endpoint.
+
+## Build the credential
+
+The process for encoding data elements, computing hashes, building the MSO, and
+signing with COSE_Sign1 is identical to the steps in
+[Create an mdoc credential](/issue-a-credential/mdoc/). The only change is that
+you use your custom namespace string in place of `org.iso.18013.5.1`.
+
+### Use your namespace in IssuerNameSpaces
+
+The namespace string is the key in `IssuerNameSpaces`:
+
+```
+IssuerNameSpaces = {
+  "uk.gov.defra.sheep-licence.1" => [
+    IssuerSignedItemBytes,  ; licence_number
+    IssuerSignedItemBytes,  ; holder_family_name
+    IssuerSignedItemBytes,  ; holder_given_name
+    IssuerSignedItemBytes,  ; holder_date_of_birth
+    IssuerSignedItemBytes,  ; issue_date
+    IssuerSignedItemBytes,  ; expiry_date
+    IssuerSignedItemBytes,  ; sheep_count
+    IssuerSignedItemBytes,  ; pasture_region
+    IssuerSignedItemBytes,  ; holding_number
+    IssuerSignedItemBytes,  ; licence_type
+    IssuerSignedItemBytes,  ; issuing_authority
+    IssuerSignedItemBytes   ; issuing_country
+  ]
+}
+```
+
+### Use your namespace in the MSO ValueDigests
+
+The same namespace string is the key in `ValueDigests` inside the Mobile Security
+Object:
+
+```
+ValueDigests = {
+  "uk.gov.defra.sheep-licence.1" => {
+    0: bstr,   ; SHA-256 digest of tagged IssuerSignedItem for licence_number
+    1: bstr,   ; SHA-256 digest for holder_family_name
+    2: bstr,   ; SHA-256 digest for holder_given_name
+    3: bstr,   ; SHA-256 digest for holder_date_of_birth
+    4: bstr,   ; SHA-256 digest for issue_date
+    5: bstr,   ; SHA-256 digest for expiry_date
+    6: bstr,   ; SHA-256 digest for sheep_count
+    7: bstr,   ; SHA-256 digest for pasture_region
+    8: bstr,   ; SHA-256 digest for holding_number
+    9: bstr,   ; SHA-256 digest for licence_type
+    10: bstr,  ; SHA-256 digest for issuing_authority
+    11: bstr   ; SHA-256 digest for issuing_country
+  }
+}
+```
+
+<%= warning_text('The namespace string in IssuerNameSpaces and ValueDigests must be identical. A mismatch will cause GOV.UK Wallet to reject the credential during verification.') %>
+
+### Set the docType in MobileDocument
+
+```
+MobileDocument = {
+  "docType"      : "uk.gov.defra.sheep-licence",
+  "issuerSigned" : IssuerSigned,
+  "deviceSigned" : DeviceSigned
+}
+```
+
+The `docType` in `MobileDocument` must match the `docType` in the MSO exactly.
+
+## Use the example credential issuer
+
+The [GOV.UK Wallet example credential issuer](https://github.com/govuk-one-login/mobile-wallet-example-credential-issuer)
+is a reference Java implementation you can use as a starting point. It uses
+`@Namespace` annotations to declare which namespace each data element belongs to.
+To adapt it for a new credential type, you create a class with a field for each
+data element, and annotate each field with your namespace string:
+
+```java
+@Namespace("uk.gov.defra.sheep-licence.1")
+private String licenceNumber;
+
+@Namespace("uk.gov.defra.sheep-licence.1")
+private Integer sheepCount;
+```
+
+The example issuer handles CBOR encoding, digest computation, and COSE_Sign1
+signing automatically once the class and namespace are defined.
+
+Contact the GOV.UK Wallet onboarding team for access to the example issuer and
+for help adapting it to your credential type.
+
+## Related guidance
+
+- [Create an mdoc credential](/issue-a-credential/mdoc/) —
+  the full mdoc format reference, including IssuerSignedItem encoding, MSO
+  structure, and COSE_Sign1 signing
+- [Publish your metadata](/issue-a-credential/metadata/) —
+  how to declare the credentials your service supports
+- [Before you issue a credential](/before-integrating.html) —
+  onboarding steps you must complete before issuing any credential type
+- [GOV.UK Wallet example credential issuer](https://github.com/govuk-one-login/mobile-wallet-example-credential-issuer) —
+  reference Java implementation
