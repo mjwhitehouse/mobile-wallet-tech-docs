@@ -7,7 +7,9 @@ review_in: 6 months
 
 # Publish your JSON Web Key Set (JWKS)
 
-The JWKS endpoint is a required endpoint that exposes the credential issuer’s public cryptographic keys. GOV.UK One Login uses this endpoint to get the public key to verify the [pre-authorised code](/issue-a-credential/credential-offer/#the-pre-authorised-code) signature. This process confirms that the pre-authorised code was issued by the expected credential issuer and that it has not been tampered with.
+You need to publish your public cryptographic keys at a JWKS endpoint. GOV.UK One Login uses this endpoint to verify the signature on the [pre-authorised code](/issue-a-credential/credential-offer/#the-pre-authorised-code) your service generates. This confirms the pre-authorised code was issued by your service and has not been tampered with.
+
+This endpoint must be publicly accessible without authentication. GOV.UK One Login calls it directly during the token exchange, before any access token exists.
 
 ## Technical details
 

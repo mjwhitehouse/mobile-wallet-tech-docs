@@ -1,57 +1,98 @@
 ---
 title: Before you issue a credential
 weight: 3
-last_reviewed_on: 2025-12-04
+last_reviewed_on: 2026-03-31
 review_in: 6 months
 ---
 
 # Before you issue a credential
 
-Before you can issue a credential, you must do the following.
+Before you can issue a credential to GOV.UK Wallet, you need to complete the steps on this page. Read this page first — it tells you what you need to build, what to arrange with the GOV.UK Wallet team, and what must be in place before you can test end-to-end.
+
+## What you need to build
+
+You need to build and host the following HTTP endpoints as part of your service. Each one plays a specific role in the credential issuance flow.
+
+1. `GET /.well-known/openid-credential-issuer` — tells GOV.UK Wallet where your credential endpoint is and what credential types you support. See [publish your metadata](issue-a-credential/metadata).
+
+2. `GET /.well-known/jwks.json` — lets GOV.UK One Login verify the signature on the pre-authorised code your service generates. See [publish your JSON Web Key Set (JWKS)](issue-a-credential/jwks).
+
+3. `GET /.well-known/did.json` — lets GOV.UK Wallet verify the signature on the credential your service issues. See [publish your decentralised identifier (DID) document](issue-a-credential/did).
+
+4. `POST /credential` — receives credential requests from GOV.UK Wallet and returns a signed credential. This is the core endpoint. See [issue a credential](issue-a-credential/credential).
+
+5. `POST /notification` (optional) — receives a success or failure callback from GOV.UK Wallet after it has stored the credential. See [handle notifications from GOV.UK Wallet](issue-a-credential/notification).
+
+### Keys and certificates you need to generate
+
+You need at least one EC P-256 key pair. This key pair is used to sign the pre-authorised code your service generates (published in your JWKS endpoint) and to sign the credentials your service issues (published in your DID document). You can use the same key pair for both, or separate key pairs. See [manage keys](manage-keys).
+
+If you are issuing an mdoc-based credential — such as the mobile driving licence — you also need:
+
+- an IACA (Issuing Authority Certificate Authority) root certificate
+- a Document Signer certificate issued under that IACA root, with the `id-mdoc-signer` Extended Key Usage (EKU) extension
+
+Your IACA root certificate must be registered with the GOV.UK Wallet team before end-to-end testing is possible. See [certificate requirements](/issue-a-credential/mdoc/#certificate-requirements) for full details.
+
+## Before you can test end-to-end
+
+Three things must be in place before you can successfully complete an end-to-end credential issuance test:
+
+1. Your GOV.UK One Login client must have the `walletSubjectId` custom claim activated — see [onboard with GOV.UK One Login](#onboard-with-gov-uk-one-login).
+2. Your credential template must be agreed with the GOV.UK Wallet onboarding team — see [agree a credential template](#agree-a-credential-template).
+3. If you are issuing an mdoc credential: your IACA root certificate must be registered with the GOV.UK Wallet trust infrastructure.
+
+Contact the GOV.UK Wallet onboarding team early to arrange items 2 and 3. Waiting until your implementation is complete to arrange these will delay your testing.
 
 ## Onboard with GOV.UK One Login
 
-GOV.UK Wallet uses GOV.UK One Login to authenticate users. This process makes sure that credentials are issued into a wallet that is logged in as the same user the credential is for.
+GOV.UK Wallet uses GOV.UK One Login to authenticate users. This makes sure that credentials are issued into a wallet that is logged in as the same user the credential is for.
 
-You must complete the onboarding process for GOV.UK One Login before you can issue credentials to GOV.UK Wallet. There’s further [guidance on onboarding to GOV.UK One Login](https://docs.sign-in.service.gov.uk/).
+You must complete the GOV.UK One Login onboarding process before you can issue credentials to GOV.UK Wallet. There's further [guidance on onboarding to GOV.UK One Login](https://docs.sign-in.service.gov.uk/).
 
 When you complete the GOV.UK One Login onboarding process, make sure you have:
 
-- requested that the GOV.UK One Login onboarding team activates the `walletSubjectId` custom claim for your GOV.UK One Login client  - this is a pairwise identifier used to prove that the user logged in to your service and to GOV.UK Wallet are the same user
-- your unique client identifier - this identifier must be included as a claim (`client_id`) in the pre-authorised code your service generates as part of issuing a GOV.UK Wallet credential offer
-
+- requested that the GOV.UK One Login onboarding team activates the `walletSubjectId` custom claim for your GOV.UK One Login client — this is a pairwise identifier used to prove that the user logged in to your service and to GOV.UK Wallet are the same user
+- your unique client identifier — this must be included as a claim (`client_id`) in the pre-authorised code your service generates as part of issuing a credential offer
 
 ## Agree a credential template
 
 Your credential template will be created from the following details:
 
-- the credential type - this can be [mdoc](https://www.iso.org/obp/ui/en/#iso:std:iso-iec:18013:-5:ed-1:v1:en) or [JWT VC following the W3C Verifiable Credentials Data Model v2.0](https://www.w3.org/TR/vc-data-model-2.0/)
+- the credential type — this can be [mdoc (ISO/IEC 18013-5)](https://www.iso.org/obp/ui/en/#iso:std:iso-iec:18013:-5:ed-1:v1:en) or [JWT VC following the W3C Verifiable Credentials Data Model v2.0](https://www.w3.org/TR/vc-data-model-2.0/)
 - the attributes you want to include in the digital credential and its schema
 - the colour of the digital card
 - whether users can have multiple instances of this credential, or only one at a time
 
-Before you can issue a credential, you must confirm these with the GOV.UK Wallet onboarding team.
+If you are issuing an mdoc credential, you also need to agree:
 
-To integrate with GOV.UK Wallet, you must send the GOV.UK Wallet team your:
+- your `docType` string — for example, `uk.gov.defra.sheep-licence`
+- your namespace string — for example, `uk.gov.defra.sheep-licence.1`
+- the version suffix convention for your namespace
+
+See [issue a credential with a custom namespace](/issue-a-credential/mdoc/custom-namespace/) for guidance on naming conventions.
+
+Before you can issue a credential, you must confirm all of the above with the GOV.UK Wallet onboarding team.
+
+To integrate with GOV.UK Wallet, you must also send the GOV.UK Wallet team your:
 
 - issuer URL (both integration and production)
 - issuer logo in English and Welsh
 
-
 ## Follow relevant standards
 
-When you are preparing to issue a credential to GOV.UK Wallet you must align with open standards.
+When you prepare to issue a credential to GOV.UK Wallet, you must align with open standards.
 
-GOV.UK Wallet will support multiple credential formats to represent government documents. These documents can be: 
+GOV.UK Wallet supports [OpenID Connect for Verifiable Credential Issuance (OID4VCI)](https://openid.net/specs/openid-4-verifiable-credential-issuance-1_0.html) for its issuance flow.
+
+GOV.UK Wallet supports the following credential formats:
 
 - [mdoc-based credentials for the digital driving licence](https://www.iso.org/obp/ui/en/#iso:std:iso-iec:18013:-5:ed-1:v1:en)
 - verifiable credentials (VCs) following the [W3C Verifiable Credential Data Model 2.0](https://www.w3.org/TR/vc-data-model-2.0/) without selective disclosure support
 
-GOV.UK Wallet supports [OpenID Connect for Verifiable Credential Issuance (OIDC4VCI)](https://openid.net/specs/openid-4-verifiable-credential-issuance-1_0.html) for its issuance flow.
-
 You should also:
 
 - follow the government [Service Standard](https://www.gov.uk/service-manual/service-standard), for example making all information available in Welsh
-- use findings identified by your user research to meet your users’ needs, as specified in the [Government Design Principles](https://www.gov.uk/guidance/government-design-principles#start-with-user-needs)
+- use findings identified by your user research to meet your users' needs, as specified in the [Government Design Principles](https://www.gov.uk/guidance/government-design-principles#start-with-user-needs)
 
-To get started, you need to [authenticate users with GOV.UK One Login](issue-a-credential/authenticate-users).
+To get started, see [issue a credential](issue-a-credential/) for the full implementation sequence.

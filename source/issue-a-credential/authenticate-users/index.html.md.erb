@@ -7,10 +7,10 @@ review_in: 6 months
 
 # Authenticate users with GOV.UK One Login
 
-If your service wants to issue credentials you must use GOV.UK One Login to authenticate your users. This process makes sure that credentials are issued into a user’s wallet that is logged in as the same user the credential is for.
+To issue credentials, your service must use GOV.UK One Login to authenticate users. This makes sure credentials are issued into a wallet that is logged in as the same user the credential is for.
 
-When registering your service with GOV.UK One Login, you get a unique client identifier. You must include this identifier as a `clientId` claim in the pre-authorised code your service generates as part of issuing a credential offer.
+When you register your service with GOV.UK One Login, you receive a unique client identifier. You must include this as a `clientId` claim in the pre-authorised code your service generates as part of issuing a credential offer. See [generate a credential offer](/issue-a-credential/credential-offer).
 
-There is more guidance on [issuing a credential offer](/issue-a-credential/credential-offer).
+You must also request that the GOV.UK One Login onboarding team activates the `walletSubjectId` custom claim for your client. This claim is not enabled by default. Without it, your service cannot perform the rightful holder check required to issue a credential.
 
-When your user authenticates with GOV.UK One Login, you obtain their user information which includes their GOV.UK Wallet subject identifier (`walletSubjectId`). This subject identifier is a pairwise identifier you can use to carry out a rightful holder check at the point where you issue the digital credential. This check makes sure that the user logged in to your service and GOV.UK Wallet are the same user.
+When your user authenticates with GOV.UK One Login, you obtain their user information, which includes their GOV.UK Wallet subject identifier (`walletSubjectId`). This is a pairwise identifier you use to confirm that the user who authenticated with your service is the same user who has the wallet you are issuing the credential to.

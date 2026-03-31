@@ -1,7 +1,7 @@
 ---
 title: Create an mdoc credential
 weight: 46
-last_reviewed_on: 2026-03-08
+last_reviewed_on: 2026-03-31
 review_in: 6 months
 ---
 
@@ -15,6 +15,44 @@ when constructing and signing the credential.
 
 This page covers the mdoc format only. If you are issuing a JWT-based verifiable
 credential, see [Issue a credential](/issue-a-credential/credential/).
+
+## What is an mdoc?
+
+An mdoc stores each data element separately, so the holder can choose which individual
+pieces of information to share with a verifier. This is called **selective disclosure**.
+It is different from a JWT verifiable credential, where all claims are disclosed together
+whenever the credential is presented.
+
+**The envelope analogy.** Think of it like a tamper-evident envelope system. Your
+department puts each piece of information — for example, someone's name or date of
+birth — into a separate sealed envelope. You then photograph each sealed envelope
+(that is the hash), and sign a document listing all the photographs (that is the
+Mobile Security Object, or MSO). At verification time, the holder hands over only
+the envelopes they choose to open. The verifier checks that each opened envelope's
+contents match the photograph in the signed document, without ever needing to see
+the other envelopes.
+
+mdocs encode data using **CBOR (Concise Binary Object Representation)** — a compact
+binary data format defined in RFC 7049, similar to JSON but more efficient and with
+a type-tagging system. You do not need to understand the full CBOR specification to
+implement this, but you do need a CBOR library. Most languages have one available.
+
+## Before you start
+
+Make sure the following are in place before you begin implementation:
+
+- **Agreed docType and namespace strings** from the GOV.UK Wallet onboarding team. Do
+  not use values you have invented yourself — unregistered docTypes will be rejected.
+- **An IACA (Issuing Authority Certificate Authority) root certificate** and a
+  **Document Signer certificate** issued under it, with the `id-mdoc-signer`
+  Extended Key Usage (EKU) extension. See [Certificate requirements](#certificate-requirements)
+  and [Manage keys](/manage-keys/).
+- **Your IACA root registered with GOV.UK Wallet.** This must be done before
+  end-to-end testing is possible. Contact the GOV.UK Wallet onboarding team to
+  arrange this early.
+- **A CBOR library** for your implementation language.
+- **The wallet's device public key** (`did:key`) — GOV.UK Wallet includes this in
+  the proof of possession when it calls your `/credential` endpoint.
 
 ## Understand the mdoc issuance flow
 
@@ -253,7 +291,31 @@ You must then wrap this map as a **tagged CBOR byte string** using CBOR tag 24
 (`#6.24(bstr)`). This wrapping is required so that the hash you compute in the
 next step covers the exact bytes of each CBOR-encoded element.
 
-<%= warning_text('A common implementation error is to hash the IssuerSignedItem map directly without first wrapping it with CBOR tag 24. The hash must be computed over the tagged byte string, not the map.') %>
+### Worked example: encoding a family_name element
+
+For a `family_name` element with the value `"SMITH"`, the `IssuerSignedItem` map
+before wrapping would contain:
+
+| Field | Example value |
+|---|---|
+| `digestID` | `0` |
+| `random` | `a3f2c1...` (16+ bytes of cryptographically random data, shown here as hex) |
+| `elementIdentifier` | `"family_name"` |
+| `elementValue` | `"SMITH"` (CBOR text string) |
+
+After CBOR-encoding this map, you wrap the resulting bytes with CBOR tag 24 to
+produce a tagged byte string: `#6.24(bstr)`. The SHA-256 hash is then computed
+over this tagged byte string — for example:
+
+```
+SHA-256(#6.24(bstr .cbor IssuerSignedItem)) = e3b0c44298fc1c14... (example value)
+```
+
+This digest (digest ID `0`) goes into the MSO's `valueDigests`. The tagged byte
+string itself goes into `IssuerNameSpaces`, so the wallet can present it to a
+verifier who recomputes the hash to check it matches.
+
+<%= warning_text('A common implementation error is to hash the IssuerSignedItem map directly without first wrapping it with CBOR tag 24. The hash must be computed over the tagged byte string, not the map. If you skip the tag 24 wrapping, the digests in your MSO will not match the IssuerSignedItems, and GOV.UK Wallet will reject the credential during verification.') %>
 
 ### Compute hashes
 
@@ -344,9 +406,12 @@ VC. It cryptographically binds the credential to the specific wallet instance.
 
 ## Sign the MSO using COSE_Sign1
 
-Sign the MSO using a COSE_Sign1 structure, as defined in
-[RFC 8152](https://datatracker.ietf.org/doc/html/rfc8152). This produces a
-structure called **IssuerAuth**:
+Sign the MSO using a COSE_Sign1 structure. COSE (CBOR Object Signing and Encryption)
+is a standard for attaching cryptographic signatures to CBOR data, defined in
+[RFC 8152](https://datatracker.ietf.org/doc/html/rfc8152). COSE_Sign1 is the
+single-signer variant. Signing the MSO this way produces a structure called
+**IssuerAuth**, which is what GOV.UK Wallet verifies to establish that your
+department issued the credential.
 
 ```
 IssuerAuth = COSE_Sign1  ; see RFC 8152
@@ -363,7 +428,8 @@ The protected header is a CBOR map containing:
 
 The `x5chain` header (COSE header label `33`) must contain your Document Signer
 certificate and any intermediate certificates, up to but not including your IACA
-root certificate. The verifier uses this chain to verify your signature and
+root certificate. DER (Distinguished Encoding Rules) is the binary encoding format
+for X.509 certificates. The verifier uses this chain to verify your signature and
 establish trust in your issuing authority.
 
 Encode the protected header as a CBOR map, then wrap it as a byte string before
@@ -536,6 +602,25 @@ As an issuing department, you are responsible for:
 GOV.UK Wallet is responsible for generating the device key pair, providing the
 device public key in the proof of possession, and adding `deviceSigned` at
 presentation time.
+
+## Verify your implementation
+
+Before you attempt end-to-end testing with GOV.UK Wallet, verify your implementation
+at each of these checkpoints:
+
+1. **Check the top-level structure.** Decode your base64url-encoded credential using
+   a CBOR diagnostic tool (for example [cbor.me](https://cbor.me)). Verify the
+   decoded map contains `docType`, `issuerSigned.nameSpaces`, and
+   `issuerSigned.issuerAuth`.
+
+2. **Verify the hash chain.** Pick one of your tagged `IssuerSignedItem` byte strings
+   from `issuerSigned.nameSpaces`. Recompute its SHA-256 hash and confirm it matches
+   the corresponding `digestID` entry in the MSO's `valueDigests`. A mismatch here
+   means you have either skipped CBOR tag 24 wrapping or hashed the wrong bytes.
+
+3. **Verify the COSE_Sign1 signature.** Before submitting to GOV.UK Wallet, verify
+   the IssuerAuth COSE_Sign1 structure using your Document Signer public key. Most
+   COSE libraries provide a verification function for this.
 
 ## Related guidance
 

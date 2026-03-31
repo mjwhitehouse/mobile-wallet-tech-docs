@@ -18,6 +18,20 @@ For your credential issuer service, you should include specific key management f
 
 This table describes the possible states of a key pair used for signing credentials:
 
+## If you are issuing mdoc credentials
+
+If you are issuing mdoc-based credentials, you also need to manage a Document Signer certificate in addition to your JWT signing key pair.
+
+Your Document Signer certificate is issued under your IACA (Issuing Authority Certificate Authority) root and is used to sign the Mobile Security Object (MSO) inside each mdoc credential. Unlike a JWT signing key, the Document Signer key and its certificate chain are embedded directly in the signed credential — so GOV.UK Wallet and verifiers can check the certificate chain without needing to call your endpoints.
+
+Key management requirements for mdoc Document Signer certificates:
+
+- You must rotate your Document Signer certificate before it expires. Plan your rotation schedule to avoid any gap in signing capability.
+- A retiring Document Signer certificate must remain valid (not revoked) for the full lifetime of any credentials signed with it. If you revoke a Document Signer certificate while credentials signed with it are still in use, those credentials will become unverifiable.
+- Your IACA root certificate must remain registered with the GOV.UK Wallet trust infrastructure for the same period.
+
+Contact the GOV.UK Wallet onboarding team to register a new Document Signer certificate or to notify them of a planned certificate rotation. See [certificate requirements](/issue-a-credential/mdoc/#certificate-requirements) for technical requirements.
+
 | Key State | Description                                                                                                                                         |
 |-----------|-----------------------------------------------------------------------------------------------------------------------------------------------------|
 | Created   | A key pair is generated with an activation date in the future. It is not yet used for signing.                                                      |

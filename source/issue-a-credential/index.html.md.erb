@@ -1,18 +1,63 @@
 ---
 title: Issue a credential
 weight: 5
-last_reviewed_on: 2025-12-04
+last_reviewed_on: 2026-03-31
 review_in: 6 months
 ---
 
 # Issue a credential
 
-In this section, you can find information on how to:
+Complete these steps in order. Some steps cannot be tested until earlier steps are live and accessible.
 
-* [authenticate users with GOV.UK One Login](authenticate-users/)
-* [generate a credential offer](credential-offer/)
-* [publish your metadata](metadata/)
-* [publish your JSON Web Key Set (JWKS)](jwks/)
-* [issue a credential](credential/)
-* [publish your decentralised identifier (DID) document](did/)
-* [handle notifications from GOV.UK Wallet](notification/)
+If you have not already read [before you issue a credential](/before-integrating), start there. It explains what you need to build, what to arrange with the GOV.UK Wallet team, and what must be in place before end-to-end testing.
+
+## Implementation sequence
+
+### 1. Authenticate users with GOV.UK One Login
+
+[Authenticate users with GOV.UK One Login](authenticate-users/)
+
+You must authenticate users with GOV.UK One Login before you can issue a credential. This step retrieves the user's `walletSubjectId`, which your service uses later to confirm it is issuing the credential to the correct wallet.
+
+### 2. Generate a credential offer
+
+[Generate a credential offer](credential-offer/)
+
+Your service generates a signed credential offer containing a pre-authorised code and displays it to the user as a QR code or deep link. This is the entry point that triggers GOV.UK Wallet to start the credential request flow.
+
+### 3. Publish your metadata
+
+[Publish your metadata](metadata/)
+
+You must publish a metadata endpoint at `GET /.well-known/openid-credential-issuer`. GOV.UK Wallet fetches this endpoint before it requests a credential, to find your credential endpoint and understand what credential types your service supports.
+
+### 4. Publish your JSON Web Key Set (JWKS)
+
+[Publish your JSON Web Key Set (JWKS)](jwks/)
+
+You must publish your public keys at `GET /.well-known/jwks.json`. GOV.UK One Login fetches this endpoint to verify the signature on the pre-authorised code your service generates. This endpoint must be live before GOV.UK One Login can exchange a pre-authorised code for an access token.
+
+### 5. Issue a credential
+
+[Issue a credential](credential/)
+
+You must build a `POST /credential` endpoint that receives credential requests from GOV.UK Wallet and returns a signed, device-bound credential. This is the most complex step — allow your team time to read the guidance before starting.
+
+<%= warning_text('Your metadata (step 3) and JWKS (step 4) endpoints must be live and publicly accessible before GOV.UK Wallet can successfully call your credential endpoint.') %>
+
+If you are issuing an mdoc-based credential — such as the mobile driving licence — you also need to follow the mdoc-specific credential construction guidance:
+
+- [Create an mdoc credential](mdoc/) — how to encode data elements, build the Mobile Security Object (MSO), and sign with COSE_Sign1
+- [Issue a credential with a custom namespace](mdoc/custom-namespace/) — if your credential type does not use ISO 18013-5.1 standard driving licence attributes
+
+### 6. Publish your DID document
+
+[Publish your decentralised identifier (DID) document](did/)
+
+You must publish your public key as a DID document at `GET /.well-known/did.json`. GOV.UK Wallet fetches this endpoint after receiving your credential, to verify the signature on it. You can use the same key pair as your JWKS, or a separate one.
+
+### 7. Handle notifications (optional)
+
+[Handle notifications from GOV.UK Wallet](notification/)
+
+If you implement a `POST /notification` endpoint, GOV.UK Wallet will send your service a callback to confirm whether it successfully stored the credential. This step is optional. Implement it last, once the core issuance flow is working end-to-end.

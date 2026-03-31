@@ -7,10 +7,10 @@ review_in: 6 months
 
 # Publish your metadata
 
-The metadata endpoint provides essential configuration information about a credential issuer’s implementation. To issue credentials, you must publish your metadata endpoint so that GOV.UK Wallet and verifiers can learn information about your credential issuer, such as:
+You need to publish a metadata endpoint so that GOV.UK Wallet can discover your credential endpoint and understand what credential types your service supports. The metadata endpoint tells GOV.UK Wallet:
 
-- the endpoints used in your issuance flow
-- the supported credential types
+- where to send credential requests (your credential endpoint URL)
+- what credential types your service issues
 - how your credentials should be displayed
 
 ## Technical details
@@ -47,13 +47,15 @@ Each credential object in `credential_configurations_supported` must include the
 
 | Parameter                                 | Description                                                                                  | 
 |-------------------------------------------|----------------------------------------------------------------------------------------------| 
-| `format`                                  | Format of the credential.                                                                    |
+| `format`                                  | Format of the credential. Use `jwt_vc_json` for JWT VCs or `mso_mdoc` for mdoc credentials. |
 | `credential_definition`                   | Description of the credential type.                                                          |
 | `cryptographic_binding_methods_supported` | Set of methods available for cryptographically binding the issued credential.                |
 | `credential_signing_alg_values_supported` | Set of algorithms that the credential issuer uses to sign the credential.                    |
 | `proof_types_supported`                   | Key proof(s) supported by the credential issuer.                                             |
 | `credential_refresh_web_journey_url`      | The URL where your users can go through the credential refresh web journey in their browser. |
 | `credential_validity_period_max_days`     | The credential’s validity period in days once it’s issued.                                   |
+
+If you are issuing an mdoc credential, you must set `format` to `mso_mdoc` and include a `doctype` parameter in the credential configuration object. The `doctype` value must match the docType string agreed with the GOV.UK Wallet onboarding team — for example `org.iso.18013.5.1.mDL` for the mobile driving licence. See [declare mdoc support in your issuer metadata](/issue-a-credential/mdoc/#declare-mdoc-support-in-your-issuer-metadata) for a full mdoc metadata example.
 
 GOV.UK Wallet also requires your credential issuer’s metadata to support English and Welsh translation.
 
