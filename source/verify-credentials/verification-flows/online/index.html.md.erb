@@ -14,7 +14,7 @@ In these examples the website selling the product (relying party) must get proof
 
 There are more details about the [credentials available in GOV.UK Wallet](/verify-credentials/credentials-in-wallet/) that you can use in your verification process.
 
-#### OID4VP same device flow
+## OID4VP same-device flow
 
 You should use the same device flow when your user's GOV.UK Wallet credentials are held on the same device as the one they're currently using.
 
@@ -28,7 +28,7 @@ The data flow for this is:
 
 3. The relying party’s website or embedded DVS displays the credential request to the user as a link.
 
-4. The user clicks on the link, which opens the GOV.UK One Login app.
+4. The user clicks on the link, which opens the GOV.UK Wallet app.
 
 5. To open GOV.UK Wallet, the user authenticates themselves with GOV.UK One Login and uses the device’s local authentication (face, fingerprint, PIN or pattern).
 
@@ -44,7 +44,7 @@ The data flow for this is:
 
 11. The relying party website shows a visual confirmation of the credential verification. If the verification was successful and the user has proven their age, they can continue with the transaction.
 
-#### OID4VP cross device flow
+## OID4VP cross-device flow
 
 You should use the cross device flow when your user's GOV.UK Wallet credentials are held on a different device to the one they're currently using.
 
@@ -70,6 +70,6 @@ The data flow for this interaction is as follows.
 
 9. The user reviews the requested data, consents to share it, and allows it to be shared with the DVS and the relying party.
 
-10. The DVS checks the data’s authenticity, origin and validity, and passes it to the relying party
+10. The DVS checks the data’s authenticity, origin and validity, and passes it to the relying party.
 
 11. The relying party shows a visual confirmation of the credential verification. If verification was successful and the user has proven their age, they can continue with their purchase.

@@ -28,7 +28,7 @@ We'll publish further details of how we'll support these features, including GOV
 
 ## Understand GOV.UK Wallet’s in-person sharing flow
 
-This diagram shows an overview of how GOV.UK Wallet will handle in-person credential sharing to let users share their information with your verifier implementation via the GOV.UK One Login app. This diagram, and the descriptions below it, are an explanation of each step in the process.
+This diagram shows an overview of how GOV.UK Wallet will handle in-person credential sharing to let users share their information with your verifier implementation via the GOV.UK Wallet app. This diagram, and the descriptions below it, are an explanation of each step in the process.
 
 <div aria-hidden="true">
 <script type="module">
@@ -67,25 +67,25 @@ This diagram shows an overview of how GOV.UK Wallet will handle in-person creden
 </html>
 </div>
 
-1. The credential holder opens the GOV.UK One Login app containing their mobile driving licence to present their information.
+1. The credential holder opens the GOV.UK Wallet app containing their mobile driving licence to present their information.
 
-1. The GOV.UK One Login app begins device engagement and generates a QR code that contains device engagement information and the app’s ephemeral public key.
+1. The GOV.UK Wallet app begins device engagement and generates a QR code that contains device engagement information and the app’s ephemeral public key.
 
 1. The verifier opens the verifier app on their device.
 
 1. Using the verifier app, the verifier scans the QR code displayed on the credential holder’s device.
 
-1. The verifier app begins session establishment by sending its ephemeral public key to the GOV.UK One Login app, and attempts to establish a secure Bluetooth connection.
+1. The verifier app begins session establishment by sending its ephemeral public key to the GOV.UK Wallet app, and attempts to establish a secure Bluetooth connection.
 
 1. The two devices establish a secure connection, and create a unique session key to encrypt the data shared during the session.
 
 1. During the session establishment, the verifier app sends its presentation request. This request contains details of the credential holder information the verifier wants to verify.
 
-1. The GOV.UK One Login app receives the presentation request from the verifier’s app, and requests consent from the credential holder to share their data.
+1. The GOV.UK Wallet app receives the presentation request from the verifier’s app, and requests consent from the credential holder to share their data.
 
 1. The credential holder consents to share the requested information with the verifier app.
 
-1. The GOV.UK One Login app sends a presentation back to the verifier app. The presentation contains the information that the credential holder consented to share.
+1. The GOV.UK Wallet app sends a presentation back to the verifier app. The presentation contains the information that the credential holder consented to share.
 
 1. The verifier app checks the presentation, its signature and its issuer. It also checks that the credential is still valid.
 
@@ -103,9 +103,9 @@ The data flow for this interaction is as follows:
 
 1. The relying party (the business selling the product) asks the user to show proof of their age.
 
-1. The user opens the GOV.UK One Login app.
+1. The user opens the GOV.UK Wallet app.
 
-1. To access the GOV.UK One Login app, the user authenticates themselves with GOV.UK One Login and also uses their device’s local authentication (face, fingerprint, PIN or pattern).
+1. To access the GOV.UK Wallet app, the user authenticates themselves with GOV.UK One Login and also uses their device’s local authentication (face, fingerprint, PIN or pattern).
 
 1. The verifier app on the relying party’s device is configured to request data from the user’s mobile driving licence. For this transaction, the data requested is a proof of age.
 
